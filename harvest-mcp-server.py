@@ -3,17 +3,24 @@ import json
 import httpx
 from datetime import datetime
 from mcp.server.fastmcp import FastMCP
+from dotenv import load_dotenv
+
+# Load environment variables from .env file if it exists (optional)
+# System environment variables take precedence
+load_dotenv()
 
 # Initialize FastMCP server
 mcp = FastMCP("harvest-api")
 
 # Get environment variables for Harvest API
+# Will use system environment variables if set, otherwise falls back to .env
 HARVEST_ACCOUNT_ID = os.environ.get("HARVEST_ACCOUNT_ID")
 HARVEST_API_KEY = os.environ.get("HARVEST_API_KEY")
 
 if not HARVEST_ACCOUNT_ID or not HARVEST_API_KEY:
     raise ValueError(
-        "Missing Harvest API credentials. Set HARVEST_ACCOUNT_ID and HARVEST_API_KEY environment variables."
+        "Missing Harvest API credentials. Set HARVEST_ACCOUNT_ID and HARVEST_API_KEY "
+        "as system environment variables or in a .env file."
     )
 
 
@@ -85,6 +92,8 @@ async def list_time_entries(
     to_date: str = None,
     is_running: bool = None,
     is_billable: bool = None,
+    page: int = None,
+    per_page: int = None,
 ):
     """List time entries with optional filtering.
 
@@ -94,6 +103,8 @@ async def list_time_entries(
         to_date: Only return time entries with a spent_date on or before the given date (YYYY-MM-DD)
         is_running: Pass true to only return running time entries and false to return non-running time entries
         is_billable: Pass true to only return billable time entries and false to return non-billable time entries
+        page: The page number for pagination
+        per_page: The number of records to return per page (1-2000)
     """
     params = {}
     if user_id is not None:
@@ -106,6 +117,12 @@ async def list_time_entries(
         params["is_running"] = "true" if is_running else "false"
     if is_billable is not None:
         params["is_billable"] = "true" if is_billable else "false"
+    if page is not None:
+        params["page"] = str(page)
+    if per_page is not None:
+        params["per_page"] = str(per_page)
+    else:
+        params["per_page"] = "200"
 
     response = await harvest_request("time_entries", params)
     return json.dumps(response, indent=2)
@@ -299,6 +316,82 @@ async def get_unsubmitted_timesheets(
         "links": response.get("links", {})
     }
     
+    return json.dumps(filtered_response, indent=2)
+
+
+@mcp.tool()
+async def get_project_time_entries(
+    project_id: int,
+    from_date: str = None,
+    to_date: str = None,
+    page: int = None,
+    per_page: int = None,
+):
+    """Get time entries for a specific project with optional date filtering.
+
+    This function fetches all time entries and filters them by project ID,
+    then aggregates the results by user.
+
+    Args:
+        project_id: The ID of the project to get time entries for
+        from_date: Only return time entries with a spent_date on or after the given date (YYYY-MM-DD)
+        to_date: Only return time entries with a spent_date on or before the given date (YYYY-MM-DD)
+        page: The page number for pagination
+        per_page: The number of records to return per page (1-2000)
+    """
+    params = {}
+    if from_date is not None:
+        params["from"] = from_date
+    if to_date is not None:
+        params["to"] = to_date
+    if page is not None:
+        params["page"] = str(page)
+    if per_page is not None:
+        params["per_page"] = str(per_page)
+    else:
+        params["per_page"] = "200"
+
+    # Get all time entries for the date range
+    response = await harvest_request("time_entries", params)
+
+    # Filter for entries matching the project ID
+    project_entries = []
+    user_totals = {}
+
+    if "time_entries" in response:
+        for entry in response["time_entries"]:
+            if entry.get("project", {}).get("id") == project_id:
+                project_entries.append(entry)
+
+                # Aggregate by user
+                user_name = entry.get("user", {}).get("name", "Unknown")
+                user_id = entry.get("user", {}).get("id")
+                hours = entry.get("hours", 0)
+
+                if user_id not in user_totals:
+                    user_totals[user_id] = {
+                        "user_id": user_id,
+                        "user_name": user_name,
+                        "total_hours": 0,
+                        "entry_count": 0
+                    }
+
+                user_totals[user_id]["total_hours"] += hours
+                user_totals[user_id]["entry_count"] += 1
+
+    # Create a response with both detailed entries and user summaries
+    filtered_response = {
+        "project_id": project_id,
+        "time_entries": project_entries,
+        "user_summaries": list(user_totals.values()),
+        "total_hours": sum(u["total_hours"] for u in user_totals.values()),
+        "total_entries": len(project_entries),
+        "date_range": {
+            "from": from_date,
+            "to": to_date
+        }
+    }
+
     return json.dumps(filtered_response, indent=2)
 
 

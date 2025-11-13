@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "harvest": {
+      "type": "stdio",
+      "command": "uv",
+      "args": [
+        "run",
+        "harvest-mcp-server.py"
+      ]
+    }
+  }
+}
