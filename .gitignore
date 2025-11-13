@@ -1,6 +1,12 @@
 # Environment variables - DO NOT COMMIT
 .env
 
+# User-specific MCP configuration - DO NOT COMMIT
+.mcp.json
+
+# Claude Code user settings - DO NOT COMMIT
+.claude/
+
 # Python
 __pycache__/
 *.py[cod]
