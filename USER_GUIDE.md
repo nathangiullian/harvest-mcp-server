@@ -156,6 +156,28 @@ Once connected, you can interact with Harvest using natural language. Here are t
 - "Give me details about project 456"
 - "Tell me more about project XYZ"
 
+**Project assignments and tasks:**
+- "Who is assigned to project 42405187?"
+- "What tasks are available for project 12345?"
+- "Show me all projects that user 5315565 is assigned to"
+
+### Enhanced Reporting & Analytics
+
+**Project hours summaries:**
+- "Get hours summary for project 42405187 for users [5315565, 4964600, 3950214]"
+- "How many hours did the team log on project XYZ last month?"
+- "Show me hours breakdown by team member for project ABC from 2025-10-01 to 2025-10-31"
+
+**User hours across projects:**
+- "How is Nathan's time distributed across projects this month?"
+- "Show me user 5315565's hours across all projects"
+- "Get hours for user 123 on projects [456, 789, 101112]"
+
+**Team hours summaries:**
+- "Get team hours for users [5315565, 4964600, 3950214] grouped by user"
+- "Show me team hours grouped by project"
+- "Get comprehensive team report grouped by both user and project"
+
 ### Managing Clients
 
 **List clients:**
@@ -172,6 +194,21 @@ Once connected, you can interact with Harvest using natural language. Here are t
 - "Show me all available tasks"
 - "What tasks can I log time to?"
 
+**Get task details:**
+- "Get details for task 456"
+- "Tell me about task XYZ"
+
+### Invoices
+
+**List invoices:**
+- "Show me all invoices for client 123"
+- "List invoices for project 456"
+- "Show me open invoices from last month"
+- "Get paid invoices from Q4 2025"
+
+**Get invoice details:**
+- "Show me details for invoice 789"
+
 ### User Information
 
 **List users:**
@@ -181,12 +218,41 @@ Once connected, you can interact with Harvest using natural language. Here are t
 **Get user details:**
 - "Get details for user 123"
 
+### Company Information
+
+**Get account info:**
+- "Show me company information"
+- "What are the account settings?"
+
 ## Tips for Best Results
 
 1. **Be specific with dates**: Use formats like "2025-01-15" or natural language like "last Monday"
 2. **Use project and task IDs**: Ask Claude to show you projects first, then use their IDs for time entries
 3. **Check running timers**: Before starting a new timer, check if you have any running
 4. **Review before submitting**: Use the unsubmitted timesheets feature to review your time before submitting
+5. **Store project context**: Add frequently used project/user IDs to your `claude.md` file for easy reference
+6. **Use reporting tools for analytics**: The new reporting tools automatically handle pagination and provide aggregated summaries
+7. **Group reports flexibly**: Team hours summaries support grouping by user, project, or both
+
+## Storing Project Context in claude.md
+
+For projects where you frequently track time, store IDs in your `claude.md` file:
+
+```markdown
+# Project Context
+
+## Harvest Information
+- **Project ID**: 42405187
+- **Client ID**: 15131025
+- **Team Members**:
+  - Nathan Giullian (5315565)
+  - Courtney Wild (4964600)
+  - Seth Winsor (3950214)
+  - Will Smith (5274845)
+  - Logan Lewis (3768448)
+```
+
+Then you can ask: "Get hours summary for the team members listed above on this project for October 2025"
 
 ## Troubleshooting
 
@@ -297,8 +363,8 @@ Claude: [Lists entries that haven't been submitted]
 ## Limitations
 
 - The server reads data in real-time from Harvest's API, so responses depend on API availability
-- Some advanced Harvest features (like invoicing, expenses) are not yet implemented
-- Pagination is automatic but may be slow for accounts with large amounts of data
+- Some advanced Harvest features (like expenses, detailed invoice editing) are not yet implemented
+- Automatic pagination may take longer for accounts with very large amounts of data, but ensures complete results
 - The server requires an internet connection to access the Harvest API
 
 ## What's Next?

@@ -78,13 +78,43 @@ Once environment variables are set, every project just needs:
 
 No credentials to manage per-project!
 
-## Available Tools
+## Available Tools (25 Total)
 
-- `list_users`, `get_user_details`
-- `list_time_entries`, `create_time_entry`
-- `start_timer`, `stop_timer`
-- `list_projects`, `get_project_details`
-- `get_project_time_entries` (with user aggregation)
-- `list_clients`, `get_client_details`
-- `list_tasks`
-- `get_unsubmitted_timesheets`
+### Users & Assignments
+- `list_users` - List all users with filtering
+- `get_user_details` - Get details for a specific user
+- `list_user_project_assignments` - Get all projects a user is assigned to
+- `list_project_user_assignments` - Get all users assigned to a project
+
+### Time Entries
+- `list_time_entries` - List time entries with filtering
+- `create_time_entry` - Create a new time entry
+- `start_timer` - Start a new timer
+- `stop_timer` - Stop a running timer
+- `get_unsubmitted_timesheets` - Get unsubmitted time entries
+- `get_project_time_entries` - Get project time entries with user aggregation (auto-pagination)
+
+### Enhanced Reporting & Analytics
+- `get_project_hours_summary` - Get hours for specific users on a project (auto-pagination)
+- `get_user_hours_across_projects` - See user's time distribution across projects (auto-pagination)
+- `get_team_hours_summary` - Aggregate hours for multiple team members with flexible grouping (auto-pagination)
+
+### Projects
+- `list_projects` - List projects with filtering
+- `get_project_details` - Get details for a specific project
+- `list_project_task_assignments` - Get all tasks assigned to a project
+
+### Clients
+- `list_clients` - List clients with filtering
+- `get_client_details` - Get details for a specific client
+
+### Tasks
+- `list_tasks` - List all tasks with filtering
+- `get_task_details` - Get details for a specific task
+
+### Invoices
+- `list_invoices` - List invoices with filtering (client, project, date, state)
+- `get_invoice_details` - Get details for a specific invoice
+
+### Company
+- `get_company_info` - Get company/account information

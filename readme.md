@@ -10,8 +10,10 @@ The server provides the following functionality:
 
 ### Users
 
-- List users
+- List users with filtering options
 - Get user details
+- List user project assignments
+- List project user assignments (see who's assigned to a project)
 
 ### Time Entries
 - List time entries with filtering options (user, date range, billable, running, pagination)
@@ -19,11 +21,18 @@ The server provides the following functionality:
 - Start/stop timers
 - Query time entry details
 - Get unsubmitted timesheets (time entries not yet submitted for approval)
-- Get project-specific time entries with user aggregation and summaries
+- Get project-specific time entries with user aggregation and summaries (with automatic pagination)
+
+### Enhanced Reporting & Analytics
+- **Get project hours summary** - Track specific team members' hours on a project
+- **Get user hours across projects** - See how a user's time is distributed
+- **Get team hours summary** - Aggregate hours for multiple team members with flexible grouping
+- All reporting tools feature automatic pagination and sorted results
 
 ### Projects
 - List projects with filtering options
 - Retrieve detailed project information
+- List project task assignments (see available tasks for a project)
 
 ### Clients
 - List clients with filtering options
@@ -31,6 +40,15 @@ The server provides the following functionality:
 
 ### Tasks
 - List available tasks with filtering options
+- Get detailed task information
+- List project-specific task assignments
+
+### Invoices
+- List invoices with filtering by client, project, date range, and state
+- Get detailed invoice information
+
+### Company
+- Get company/account information and settings
 
 ## Setup Instructions
 
@@ -129,16 +147,64 @@ Once system environment variables are set, you can use this MCP server across **
 
 Once connected, you can ask Claude about your Harvest data with queries like:
 
+### Time Tracking
 - "Show me my time entries from last week"
-- "List all my active projects"
 - "Start a timer for project [project_id] and task [task_id]"
-- "Show me all active clients"
-- "List all available tasks"
 - "Get my unsubmitted timesheets from this month"
-- "Show me unsubmitted time entries for user [user_id]"
-- "How many hours has Nathan logged on the Charge Recon project this month?"
-- "Break down project hours by team member"
 - "Show me today's time entries"
+
+### Project & Team Management
+- "List all my active projects"
+- "Show me who is assigned to project [project_id]"
+- "What tasks are available for project [project_id]?"
+- "Get all projects that user [user_id] is assigned to"
+
+### Reporting & Analytics
+- "How many hours has [user_name] logged on project [project_id] this month?"
+- "Get a summary of hours for users [user_id_1, user_id_2, user_id_3] on project [project_id] in October"
+- "Break down project hours by team member for the last 30 days"
+- "Show me how user [user_id]'s time is distributed across all projects"
+- "Get team hours summary for users [list] grouped by project"
+
+### Clients & Invoices
+- "Show me all active clients"
+- "List invoices for project [project_id]"
+- "Get invoice details for invoice [invoice_id]"
+
+### Context & Configuration
+- "Show me the company information"
+- "What users are in the account?"
+
+## Workflow Tips
+
+### Storing Project Context
+
+For projects where you frequently query Harvest data, add project IDs to your `claude.md` file:
+
+```markdown
+# Project Context
+
+## Harvest Information
+- **Project ID**: 42405187
+- **Client ID**: 15131025
+- **Team Members**:
+  - Nathan Giullian (5315565)
+  - Courtney Wild (4964600)
+  - Seth Winsor (3950214)
+  - Will Smith (5274845)
+  - Logan Lewis (3768448)
+```
+
+Then you can easily query: "Get hours summary for the team members listed in claude.md on this project for last month"
+
+### Automatic Pagination
+
+All reporting tools automatically handle pagination, fetching all results across multiple pages. This is perfect for:
+- Large teams with many time entries
+- Long date ranges
+- Comprehensive project reports
+
+The original `get_project_time_entries` tool now supports an `auto_paginate` parameter (default: true) for consistent behavior across all tools.
 
 ## Customization
 

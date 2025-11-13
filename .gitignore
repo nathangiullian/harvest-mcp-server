@@ -6,6 +6,7 @@
 
 # Claude Code user settings - DO NOT COMMIT
 .claude/
+.improvements/
 
 # Python
 __pycache__/

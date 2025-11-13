@@ -49,6 +49,54 @@ async def harvest_request(path, params=None, method="GET"):
         return response.json()
 
 
+# Helper function to fetch all pages of results automatically
+async def harvest_request_all_pages(path, params=None):
+    """Fetch all pages of results from a Harvest API endpoint.
+
+    Args:
+        path: API endpoint path
+        params: Query parameters (optional)
+
+    Returns:
+        List of all items across all pages
+    """
+    if params is None:
+        params = {}
+
+    # Set initial page and per_page
+    params["page"] = "1"
+    if "per_page" not in params:
+        params["per_page"] = "200"
+
+    all_items = []
+
+    while True:
+        response = await harvest_request(path, params)
+
+        # Determine the key containing the items
+        # Common keys: time_entries, users, projects, clients, tasks, etc.
+        items_key = None
+        for key in response:
+            if isinstance(response[key], list):
+                items_key = key
+                break
+
+        if items_key and response[items_key]:
+            all_items.extend(response[items_key])
+
+        # Check if there are more pages
+        total_pages = response.get("total_pages", 1)
+        current_page = response.get("page", 1)
+
+        if current_page >= total_pages:
+            break
+
+        # Move to next page
+        params["page"] = str(current_page + 1)
+
+    return all_items
+
+
 @mcp.tool()
 async def list_users(is_active: bool = None, page: int = None, per_page: int = None):
     """List all users in your Harvest account.
@@ -322,28 +370,121 @@ async def get_unsubmitted_timesheets(
 @mcp.tool()
 async def get_project_time_entries(
     project_id: int,
+    user_ids: list[int] = None,
     from_date: str = None,
     to_date: str = None,
     page: int = None,
     per_page: int = None,
+    auto_paginate: bool = True,
 ):
-    """Get time entries for a specific project with optional date filtering.
+    """Get time entries for a specific project with optional date and user filtering.
 
-    This function fetches all time entries and filters them by project ID,
-    then aggregates the results by user.
+    This function fetches time entries and filters them by project ID and optionally by user IDs,
+    then aggregates the results by user. By default, automatically fetches all pages.
 
     Args:
         project_id: The ID of the project to get time entries for
+        user_ids: Optional list of user IDs to filter by (e.g., [5315565, 4964600])
         from_date: Only return time entries with a spent_date on or after the given date (YYYY-MM-DD)
         to_date: Only return time entries with a spent_date on or before the given date (YYYY-MM-DD)
-        page: The page number for pagination
-        per_page: The number of records to return per page (1-2000)
+        page: The page number for pagination (only used if auto_paginate is False)
+        per_page: The number of records to return per page (1-2000, only used if auto_paginate is False)
+        auto_paginate: If True (default), automatically fetches all pages. Set to False for manual pagination.
     """
     params = {}
     if from_date is not None:
         params["from"] = from_date
     if to_date is not None:
         params["to"] = to_date
+
+    # Get time entries - either all pages or single page
+    if auto_paginate:
+        all_entries = await harvest_request_all_pages("time_entries", params)
+    else:
+        if page is not None:
+            params["page"] = str(page)
+        if per_page is not None:
+            params["per_page"] = str(per_page)
+        else:
+            params["per_page"] = "200"
+
+        response = await harvest_request("time_entries", params)
+        all_entries = response.get("time_entries", [])
+
+    # Filter for entries matching the project ID and user IDs
+    project_entries = []
+    user_totals = {}
+
+    for entry in all_entries:
+        # Check if entry matches the project
+        if entry.get("project", {}).get("id") != project_id:
+            continue
+
+        # Check if entry matches the user filter (if provided)
+        entry_user_id = entry.get("user", {}).get("id")
+        if user_ids and entry_user_id not in user_ids:
+            continue
+
+        project_entries.append(entry)
+
+        # Aggregate by user
+        user_name = entry.get("user", {}).get("name", "Unknown")
+        hours = entry.get("hours", 0)
+
+        if entry_user_id not in user_totals:
+            user_totals[entry_user_id] = {
+                "user_id": entry_user_id,
+                "user_name": user_name,
+                "total_hours": 0,
+                "entry_count": 0
+            }
+
+        user_totals[entry_user_id]["total_hours"] += hours
+        user_totals[entry_user_id]["entry_count"] += 1
+
+    # Create a response with both detailed entries and user summaries
+    filtered_response = {
+        "project_id": project_id,
+        "time_entries": project_entries,
+        "user_summaries": sorted(
+            list(user_totals.values()),
+            key=lambda x: x["total_hours"],
+            reverse=True
+        ),
+        "total_hours": sum(u["total_hours"] for u in user_totals.values()),
+        "total_entries": len(project_entries),
+        "date_range": {
+            "from": from_date,
+            "to": to_date
+        },
+        "filtered_users": user_ids if user_ids else "all",
+        "auto_paginated": auto_paginate
+    }
+
+    return json.dumps(filtered_response, indent=2)
+
+
+@mcp.tool()
+async def list_project_user_assignments(
+    project_id: int,
+    is_active: bool = None,
+    page: int = None,
+    per_page: int = None
+):
+    """Get all user assignments for a specific project.
+
+    This shows which users are assigned to work on a project, along with their
+    hourly rates, budgets, and whether they're active on the project.
+
+    Args:
+        project_id: The ID of the project to get user assignments for
+        is_active: Pass true to only return active user assignments
+        page: The page number for pagination
+        per_page: The number of records to return per page (1-2000)
+    """
+    params = {}
+    if is_active is not None:
+        params["is_active"] = "true" if is_active else "false"
     if page is not None:
         params["page"] = str(page)
     if per_page is not None:
@@ -351,48 +492,420 @@ async def get_project_time_entries(
     else:
         params["per_page"] = "200"
 
-    # Get all time entries for the date range
-    response = await harvest_request("time_entries", params)
+    response = await harvest_request(f"projects/{project_id}/user_assignments", params)
+    return json.dumps(response, indent=2)
 
-    # Filter for entries matching the project ID
+
+@mcp.tool()
+async def list_user_project_assignments(
+    user_id: int,
+    page: int = None,
+    per_page: int = None
+):
+    """Get all project assignments for a specific user.
+
+    This shows which projects a user is assigned to work on.
+
+    Args:
+        user_id: The ID of the user to get project assignments for
+        page: The page number for pagination
+        per_page: The number of records to return per page (1-2000)
+    """
+    params = {
+        "user_id": str(user_id)
+    }
+    if page is not None:
+        params["page"] = str(page)
+    if per_page is not None:
+        params["per_page"] = str(per_page)
+    else:
+        params["per_page"] = "200"
+
+    response = await harvest_request("project_assignments", params)
+    return json.dumps(response, indent=2)
+
+
+@mcp.tool()
+async def get_project_hours_summary(
+    project_id: int,
+    user_ids: list[int] = None,
+    from_date: str = None,
+    to_date: str = None
+):
+    """Get aggregated hours summary for a project, optionally filtered by specific users.
+
+    This is ideal for tracking team member hours on a specific project over a date range.
+    Automatically fetches all pages of results.
+
+    Args:
+        project_id: The ID of the project to get hours for
+        user_ids: Optional list of user IDs to filter by (e.g., [5315565, 4964600])
+        from_date: Only include time entries on or after this date (YYYY-MM-DD)
+        to_date: Only include time entries on or before this date (YYYY-MM-DD)
+    """
+    params = {}
+    if from_date:
+        params["from"] = from_date
+    if to_date:
+        params["to"] = to_date
+
+    # Fetch all time entries across all pages
+    all_entries = await harvest_request_all_pages("time_entries", params)
+
+    # Filter for the specific project and users
     project_entries = []
     user_totals = {}
 
-    if "time_entries" in response:
-        for entry in response["time_entries"]:
-            if entry.get("project", {}).get("id") == project_id:
-                project_entries.append(entry)
+    for entry in all_entries:
+        # Check if entry matches the project
+        if entry.get("project", {}).get("id") != project_id:
+            continue
 
-                # Aggregate by user
-                user_name = entry.get("user", {}).get("name", "Unknown")
-                user_id = entry.get("user", {}).get("id")
-                hours = entry.get("hours", 0)
+        # Check if entry matches the user filter (if provided)
+        entry_user_id = entry.get("user", {}).get("id")
+        if user_ids and entry_user_id not in user_ids:
+            continue
 
-                if user_id not in user_totals:
-                    user_totals[user_id] = {
-                        "user_id": user_id,
-                        "user_name": user_name,
-                        "total_hours": 0,
-                        "entry_count": 0
-                    }
+        project_entries.append(entry)
 
-                user_totals[user_id]["total_hours"] += hours
-                user_totals[user_id]["entry_count"] += 1
+        # Aggregate by user
+        user_name = entry.get("user", {}).get("name", "Unknown")
+        hours = entry.get("hours", 0)
 
-    # Create a response with both detailed entries and user summaries
-    filtered_response = {
+        if entry_user_id not in user_totals:
+            user_totals[entry_user_id] = {
+                "user_id": entry_user_id,
+                "user_name": user_name,
+                "total_hours": 0,
+                "entry_count": 0
+            }
+
+        user_totals[entry_user_id]["total_hours"] += hours
+        user_totals[entry_user_id]["entry_count"] += 1
+
+    # Create summary response
+    summary = {
         "project_id": project_id,
-        "time_entries": project_entries,
-        "user_summaries": list(user_totals.values()),
+        "user_summaries": sorted(
+            list(user_totals.values()),
+            key=lambda x: x["total_hours"],
+            reverse=True
+        ),
         "total_hours": sum(u["total_hours"] for u in user_totals.values()),
         "total_entries": len(project_entries),
+        "date_range": {
+            "from": from_date,
+            "to": to_date
+        },
+        "filtered_users": user_ids if user_ids else "all"
+    }
+
+    return json.dumps(summary, indent=2)
+
+
+@mcp.tool()
+async def get_user_hours_across_projects(
+    user_id: int,
+    project_ids: list[int] = None,
+    from_date: str = None,
+    to_date: str = None
+):
+    """Get aggregated hours for a user across multiple projects.
+
+    Track how a user's time is distributed across different projects.
+    Automatically fetches all pages of results.
+
+    Args:
+        user_id: The ID of the user to get hours for
+        project_ids: Optional list of project IDs to filter by
+        from_date: Only include time entries on or after this date (YYYY-MM-DD)
+        to_date: Only include time entries on or before this date (YYYY-MM-DD)
+    """
+    params = {
+        "user_id": str(user_id)
+    }
+    if from_date:
+        params["from"] = from_date
+    if to_date:
+        params["to"] = to_date
+
+    # Fetch all time entries for the user across all pages
+    all_entries = await harvest_request_all_pages("time_entries", params)
+
+    # Aggregate by project
+    project_totals = {}
+
+    for entry in all_entries:
+        project_id = entry.get("project", {}).get("id")
+        project_name = entry.get("project", {}).get("name", "Unknown")
+
+        # Check if entry matches the project filter (if provided)
+        if project_ids and project_id not in project_ids:
+            continue
+
+        hours = entry.get("hours", 0)
+
+        if project_id not in project_totals:
+            project_totals[project_id] = {
+                "project_id": project_id,
+                "project_name": project_name,
+                "total_hours": 0,
+                "entry_count": 0
+            }
+
+        project_totals[project_id]["total_hours"] += hours
+        project_totals[project_id]["entry_count"] += 1
+
+    # Create summary response
+    summary = {
+        "user_id": user_id,
+        "project_summaries": sorted(
+            list(project_totals.values()),
+            key=lambda x: x["total_hours"],
+            reverse=True
+        ),
+        "total_hours": sum(p["total_hours"] for p in project_totals.values()),
+        "total_entries": sum(p["entry_count"] for p in project_totals.values()),
+        "date_range": {
+            "from": from_date,
+            "to": to_date
+        },
+        "filtered_projects": project_ids if project_ids else "all"
+    }
+
+    return json.dumps(summary, indent=2)
+
+
+@mcp.tool()
+async def get_team_hours_summary(
+    user_ids: list[int],
+    from_date: str = None,
+    to_date: str = None,
+    group_by: str = "user"
+):
+    """Get aggregated hours summary for a team of users.
+
+    Track total hours for multiple team members across all their projects.
+    Automatically fetches all pages of results.
+
+    Args:
+        user_ids: List of user IDs to include in the summary
+        from_date: Only include time entries on or after this date (YYYY-MM-DD)
+        to_date: Only include time entries on or before this date (YYYY-MM-DD)
+        group_by: How to group results - "user" (default), "project", or "both"
+    """
+    params = {}
+    if from_date:
+        params["from"] = from_date
+    if to_date:
+        params["to"] = to_date
+
+    # Fetch all time entries across all pages
+    all_entries = await harvest_request_all_pages("time_entries", params)
+
+    # Filter for specified users and aggregate
+    user_totals = {}
+    project_totals = {}
+    user_project_totals = {}
+
+    for entry in all_entries:
+        entry_user_id = entry.get("user", {}).get("id")
+
+        # Only include entries from specified users
+        if entry_user_id not in user_ids:
+            continue
+
+        user_name = entry.get("user", {}).get("name", "Unknown")
+        project_id = entry.get("project", {}).get("id")
+        project_name = entry.get("project", {}).get("name", "Unknown")
+        hours = entry.get("hours", 0)
+
+        # Aggregate by user
+        if entry_user_id not in user_totals:
+            user_totals[entry_user_id] = {
+                "user_id": entry_user_id,
+                "user_name": user_name,
+                "total_hours": 0,
+                "entry_count": 0
+            }
+        user_totals[entry_user_id]["total_hours"] += hours
+        user_totals[entry_user_id]["entry_count"] += 1
+
+        # Aggregate by project
+        if project_id not in project_totals:
+            project_totals[project_id] = {
+                "project_id": project_id,
+                "project_name": project_name,
+                "total_hours": 0,
+                "entry_count": 0
+            }
+        project_totals[project_id]["total_hours"] += hours
+        project_totals[project_id]["entry_count"] += 1
+
+        # Aggregate by user + project
+        key = f"{entry_user_id}_{project_id}"
+        if key not in user_project_totals:
+            user_project_totals[key] = {
+                "user_id": entry_user_id,
+                "user_name": user_name,
+                "project_id": project_id,
+                "project_name": project_name,
+                "total_hours": 0,
+                "entry_count": 0
+            }
+        user_project_totals[key]["total_hours"] += hours
+        user_project_totals[key]["entry_count"] += 1
+
+    # Build response based on grouping preference
+    summary = {
+        "team_user_ids": user_ids,
         "date_range": {
             "from": from_date,
             "to": to_date
         }
     }
 
-    return json.dumps(filtered_response, indent=2)
+    if group_by == "user":
+        summary["user_summaries"] = sorted(
+            list(user_totals.values()),
+            key=lambda x: x["total_hours"],
+            reverse=True
+        )
+    elif group_by == "project":
+        summary["project_summaries"] = sorted(
+            list(project_totals.values()),
+            key=lambda x: x["total_hours"],
+            reverse=True
+        )
+    elif group_by == "both":
+        summary["user_summaries"] = sorted(
+            list(user_totals.values()),
+            key=lambda x: x["total_hours"],
+            reverse=True
+        )
+        summary["project_summaries"] = sorted(
+            list(project_totals.values()),
+            key=lambda x: x["total_hours"],
+            reverse=True
+        )
+        summary["user_project_breakdown"] = sorted(
+            list(user_project_totals.values()),
+            key=lambda x: x["total_hours"],
+            reverse=True
+        )
+
+    summary["total_hours"] = sum(u["total_hours"] for u in user_totals.values())
+    summary["total_entries"] = sum(u["entry_count"] for u in user_totals.values())
+
+    return json.dumps(summary, indent=2)
+
+
+@mcp.tool()
+async def list_project_task_assignments(
+    project_id: int,
+    is_active: bool = None,
+    page: int = None,
+    per_page: int = None
+):
+    """Get all task assignments for a specific project.
+
+    This shows which tasks are available for time tracking on a project,
+    along with their billable status and hourly rates.
+
+    Args:
+        project_id: The ID of the project to get task assignments for
+        is_active: Pass true to only return active task assignments
+        page: The page number for pagination
+        per_page: The number of records to return per page (1-2000)
+    """
+    params = {}
+    if is_active is not None:
+        params["is_active"] = "true" if is_active else "false"
+    if page is not None:
+        params["page"] = str(page)
+    if per_page is not None:
+        params["per_page"] = str(per_page)
+    else:
+        params["per_page"] = "200"
+
+    response = await harvest_request(f"projects/{project_id}/task_assignments", params)
+    return json.dumps(response, indent=2)
+
+
+@mcp.tool()
+async def get_task_details(task_id: int):
+    """Get detailed information about a specific task.
+
+    Args:
+        task_id: The ID of the task to retrieve
+    """
+    response = await harvest_request(f"tasks/{task_id}")
+    return json.dumps(response, indent=2)
+
+
+@mcp.tool()
+async def get_company_info():
+    """Get information about your Harvest account/company.
+
+    Returns details like company name, time format, expense feature status,
+    invoice feature status, and other account-level settings.
+    """
+    response = await harvest_request("company")
+    return json.dumps(response, indent=2)
+
+
+@mcp.tool()
+async def list_invoices(
+    client_id: int = None,
+    project_id: int = None,
+    from_date: str = None,
+    to_date: str = None,
+    state: str = None,
+    page: int = None,
+    per_page: int = None
+):
+    """List invoices with optional filtering.
+
+    Args:
+        client_id: Filter by client ID
+        project_id: Filter by project ID
+        from_date: Only return invoices with an issue_date on or after the given date (YYYY-MM-DD)
+        to_date: Only return invoices with an issue_date on or before the given date (YYYY-MM-DD)
+        state: Filter by invoice state (draft, open, paid, closed)
+        page: The page number for pagination
+        per_page: The number of records to return per page (1-2000)
+    """
+    params = {}
+    if client_id is not None:
+        params["client_id"] = str(client_id)
+    if project_id is not None:
+        params["project_id"] = str(project_id)
+    if from_date:
+        params["from"] = from_date
+    if to_date:
+        params["to"] = to_date
+    if state:
+        params["state"] = state
+    if page is not None:
+        params["page"] = str(page)
+    if per_page is not None:
+        params["per_page"] = str(per_page)
+    else:
+        params["per_page"] = "200"
+
+    response = await harvest_request("invoices", params)
+    return json.dumps(response, indent=2)
+
+
+@mcp.tool()
+async def get_invoice_details(invoice_id: int):
+    """Get detailed information about a specific invoice.
+
+    Args:
+        invoice_id: The ID of the invoice to retrieve
+    """
+    response = await harvest_request(f"invoices/{invoice_id}")
+    return json.dumps(response, indent=2)
 
 
 if __name__ == "__main__":
