@@ -66,7 +66,7 @@ async def harvest_request_all_pages(path, params=None):
     # Set initial page and per_page
     params["page"] = "1"
     if "per_page" not in params:
-        params["per_page"] = "200"
+        params["per_page"] = "2000"
 
     all_items = []
 
@@ -116,7 +116,7 @@ async def list_users(is_active: bool = None, page: int = None, per_page: int = N
     if per_page is not None:
         params["per_page"] = str(per_page)
     else:
-        params["per_page"] = 200
+        params["per_page"] = 2000
 
     response = await harvest_request("users", params)
     return json.dumps(response, indent=2)
@@ -170,7 +170,7 @@ async def list_time_entries(
     if per_page is not None:
         params["per_page"] = str(per_page)
     else:
-        params["per_page"] = "200"
+        params["per_page"] = "2000"
 
     response = await harvest_request("time_entries", params)
     return json.dumps(response, indent=2)
@@ -339,7 +339,7 @@ async def get_unsubmitted_timesheets(
     if per_page is not None:
         params["per_page"] = str(per_page)
     else:
-        params["per_page"] = "200"
+        params["per_page"] = "2000"
 
     # Get all time entries first
     response = await harvest_request("time_entries", params)
@@ -490,7 +490,7 @@ async def list_project_user_assignments(
     if per_page is not None:
         params["per_page"] = str(per_page)
     else:
-        params["per_page"] = "200"
+        params["per_page"] = "2000"
 
     response = await harvest_request(f"projects/{project_id}/user_assignments", params)
     return json.dumps(response, indent=2)
@@ -519,7 +519,7 @@ async def list_user_project_assignments(
     if per_page is not None:
         params["per_page"] = str(per_page)
     else:
-        params["per_page"] = "200"
+        params["per_page"] = "2000"
 
     response = await harvest_request("project_assignments", params)
     return json.dumps(response, indent=2)
@@ -826,7 +826,7 @@ async def list_project_task_assignments(
     if per_page is not None:
         params["per_page"] = str(per_page)
     else:
-        params["per_page"] = "200"
+        params["per_page"] = "2000"
 
     response = await harvest_request(f"projects/{project_id}/task_assignments", params)
     return json.dumps(response, indent=2)
@@ -891,7 +891,7 @@ async def list_invoices(
     if per_page is not None:
         params["per_page"] = str(per_page)
     else:
-        params["per_page"] = "200"
+        params["per_page"] = "2000"
 
     response = await harvest_request("invoices", params)
     return json.dumps(response, indent=2)
@@ -906,6 +906,339 @@ async def get_invoice_details(invoice_id: int):
     """
     response = await harvest_request(f"invoices/{invoice_id}")
     return json.dumps(response, indent=2)
+
+
+@mcp.tool()
+async def get_project_budget_report(
+    is_active: bool = None,
+    page: int = None,
+    per_page: int = None
+):
+    """Get project budget report showing budget vs actual hours.
+
+    This endpoint returns pre-aggregated budget data for all projects,
+    making it much faster than fetching individual time entries.
+    Perfect for getting month-to-date totals and budget remaining.
+
+    Args:
+        is_active: Filter to return only active (true) or inactive (false) projects
+        page: The page number for pagination
+        per_page: The number of records to return per page (1-2000, default: 2000)
+    """
+    params = {}
+    if is_active is not None:
+        params["is_active"] = "true" if is_active else "false"
+    if page is not None:
+        params["page"] = str(page)
+    if per_page is not None:
+        params["per_page"] = str(per_page)
+    else:
+        params["per_page"] = "2000"
+
+    response = await harvest_request("reports/project_budget", params)
+    return json.dumps(response, indent=2)
+
+
+@mcp.tool()
+async def get_time_report_by_projects(
+    from_date: str,
+    to_date: str,
+    include_fixed_fee: bool = None,
+    page: int = None,
+    per_page: int = None
+):
+    """Get aggregated time report by projects.
+
+    This endpoint returns pre-aggregated time data by project, making it
+    MUCH faster than fetching individual time entries. Use this for weekly
+    status updates and project summaries.
+
+    Returns total_hours, billable_hours, and billable_amount for each project.
+
+    Args:
+        from_date: Start date for time entries (YYYY-MM-DD, required)
+        to_date: End date for time entries (YYYY-MM-DD, required)
+        include_fixed_fee: Include billable amounts for fixed fee projects
+        page: The page number for pagination
+        per_page: The number of records to return per page (1-2000, default: 2000)
+
+    Note: Date range cannot exceed 365 days
+    """
+    params = {
+        "from": from_date,
+        "to": to_date
+    }
+    if include_fixed_fee is not None:
+        params["include_fixed_fee"] = "true" if include_fixed_fee else "false"
+    if page is not None:
+        params["page"] = str(page)
+    if per_page is not None:
+        params["per_page"] = str(per_page)
+    else:
+        params["per_page"] = "2000"
+
+    response = await harvest_request("reports/time/projects", params)
+    return json.dumps(response, indent=2)
+
+
+@mcp.tool()
+async def get_time_report_by_team(
+    from_date: str,
+    to_date: str,
+    include_fixed_fee: bool = None,
+    page: int = None,
+    per_page: int = None
+):
+    """Get aggregated time report by team members.
+
+    This endpoint returns pre-aggregated time data by user, making it
+    MUCH faster than fetching individual time entries. Use this for weekly
+    status updates with individual breakdowns.
+
+    Returns total_hours, billable_hours, and billable_amount for each team member.
+
+    Args:
+        from_date: Start date for time entries (YYYY-MM-DD, required)
+        to_date: End date for time entries (YYYY-MM-DD, required)
+        include_fixed_fee: Include billable amounts for fixed fee projects
+        page: The page number for pagination
+        per_page: The number of records to return per page (1-2000, default: 2000)
+
+    Note: Date range cannot exceed 365 days
+    """
+    params = {
+        "from": from_date,
+        "to": to_date
+    }
+    if include_fixed_fee is not None:
+        params["include_fixed_fee"] = "true" if include_fixed_fee else "false"
+    if page is not None:
+        params["page"] = str(page)
+    if per_page is not None:
+        params["per_page"] = str(per_page)
+    else:
+        params["per_page"] = "2000"
+
+    response = await harvest_request("reports/time/team", params)
+    return json.dumps(response, indent=2)
+
+
+@mcp.tool()
+async def get_time_report_by_clients(
+    from_date: str,
+    to_date: str,
+    include_fixed_fee: bool = None,
+    page: int = None,
+    per_page: int = None
+):
+    """Get aggregated time report by clients.
+
+    This endpoint returns pre-aggregated time data by client, making it
+    perfect for engagement managers tracking multiple projects for the same client.
+    Shows total hours across ALL projects for each client.
+
+    Returns total_hours, billable_hours, and billable_amount for each client.
+
+    Args:
+        from_date: Start date for time entries (YYYY-MM-DD, required)
+        to_date: End date for time entries (YYYY-MM-DD, required)
+        include_fixed_fee: Include billable amounts for fixed fee projects
+        page: The page number for pagination
+        per_page: The number of records to return per page (1-2000, default: 2000)
+
+    Note: Date range cannot exceed 365 days
+
+    Use case: "Show me total hours for Acme client this month across all their projects"
+    """
+    params = {
+        "from": from_date,
+        "to": to_date
+    }
+    if include_fixed_fee is not None:
+        params["include_fixed_fee"] = "true" if include_fixed_fee else "false"
+    if page is not None:
+        params["page"] = str(page)
+    if per_page is not None:
+        params["per_page"] = str(per_page)
+    else:
+        params["per_page"] = "2000"
+
+    response = await harvest_request("reports/time/clients", params)
+    return json.dumps(response, indent=2)
+
+
+@mcp.tool()
+async def get_time_report_by_tasks(
+    from_date: str,
+    to_date: str,
+    include_fixed_fee: bool = None,
+    page: int = None,
+    per_page: int = None
+):
+    """Get aggregated time report by tasks.
+
+    This endpoint returns pre-aggregated time data by task type, helping you
+    understand WHAT work is being done (Development, Design, Meetings, etc.)
+    rather than just how much time is being spent.
+
+    Returns total_hours, billable_hours, and billable_amount for each task type.
+
+    Args:
+        from_date: Start date for time entries (YYYY-MM-DD, required)
+        to_date: End date for time entries (YYYY-MM-DD, required)
+        include_fixed_fee: Include billable amounts for fixed fee projects
+        page: The page number for pagination
+        per_page: The number of records to return per page (1-2000, default: 2000)
+
+    Note: Date range cannot exceed 365 days
+
+    Use case: "Show me task breakdown for this month - how much time on development vs meetings?"
+    """
+    params = {
+        "from": from_date,
+        "to": to_date
+    }
+    if include_fixed_fee is not None:
+        params["include_fixed_fee"] = "true" if include_fixed_fee else "false"
+    if page is not None:
+        params["page"] = str(page)
+    if per_page is not None:
+        params["per_page"] = str(per_page)
+    else:
+        params["per_page"] = "2000"
+
+    response = await harvest_request("reports/time/tasks", params)
+    return json.dumps(response, indent=2)
+
+
+@mcp.tool()
+async def get_project_budget_utilization(
+    project_id: int,
+    from_date: str = None,
+    to_date: str = None
+):
+    """Get comprehensive budget utilization metrics for a project.
+
+    This helper tool calculates useful budget metrics automatically:
+    - Budget utilization percentage
+    - Burn rate (hours per day)
+    - Projected completion date
+    - Budget health status
+
+    Perfect for engagement managers tracking project health and budget status.
+
+    Args:
+        project_id: The ID of the project to analyze
+        from_date: Optional start date to calculate burn rate (YYYY-MM-DD)
+        to_date: Optional end date to calculate burn rate (YYYY-MM-DD, defaults to today)
+
+    Returns:
+        JSON with budget metrics including:
+        - budget, budget_spent, budget_remaining
+        - utilization_percentage
+        - burn_rate (if dates provided)
+        - projected_completion_date (if burn rate available)
+        - health_status (on_track, at_risk, over_budget)
+    """
+    from datetime import datetime, timedelta
+
+    # Get project budget data
+    budget_response = await harvest_request("reports/project_budget")
+
+    # Find the specific project
+    project_data = None
+    for result in budget_response.get("results", []):
+        if result.get("project_id") == project_id:
+            project_data = result
+            break
+
+    if not project_data:
+        return json.dumps({
+            "error": f"Project {project_id} not found in budget report",
+            "project_id": project_id
+        }, indent=2)
+
+    # Extract budget data
+    budget = project_data.get("budget")
+    budget_spent = project_data.get("budget_spent", 0)
+    budget_remaining = project_data.get("budget_remaining", 0)
+    project_name = project_data.get("project_name")
+    client_name = project_data.get("client_name")
+    is_active = project_data.get("is_active")
+
+    # Calculate utilization percentage
+    utilization_pct = 0
+    if budget and budget > 0:
+        utilization_pct = (budget_spent / budget) * 100
+
+    # Determine health status
+    health_status = "on_track"
+    if not budget or budget == 0:
+        health_status = "no_budget_set"
+    elif utilization_pct > 100:
+        health_status = "over_budget"
+    elif utilization_pct > 90:
+        health_status = "at_risk"
+    elif utilization_pct > 75:
+        health_status = "caution"
+
+    result = {
+        "project_id": project_id,
+        "project_name": project_name,
+        "client_name": client_name,
+        "is_active": is_active,
+        "budget": budget,
+        "budget_spent": budget_spent,
+        "budget_remaining": budget_remaining,
+        "utilization_percentage": round(utilization_pct, 2),
+        "health_status": health_status
+    }
+
+    # Calculate burn rate if date range provided
+    if from_date and to_date:
+        try:
+            # Parse dates
+            start = datetime.strptime(from_date, "%Y-%m-%d")
+            end = datetime.strptime(to_date, "%Y-%m-%d")
+            days_elapsed = (end - start).days + 1  # Include both start and end days
+
+            if days_elapsed > 0:
+                # Get hours for the period
+                time_response = await harvest_request("reports/time/projects", {
+                    "from": from_date,
+                    "to": to_date
+                })
+
+                # Find this project's hours
+                period_hours = 0
+                for proj in time_response.get("results", []):
+                    if proj.get("project_id") == project_id:
+                        period_hours = proj.get("total_hours", 0)
+                        break
+
+                # Calculate burn rate (hours per day)
+                burn_rate = period_hours / days_elapsed if days_elapsed > 0 else 0
+                result["burn_rate_hours_per_day"] = round(burn_rate, 2)
+                result["period_analyzed"] = {
+                    "from": from_date,
+                    "to": to_date,
+                    "days": days_elapsed,
+                    "hours": period_hours
+                }
+
+                # Project completion date if burn rate is consistent
+                if burn_rate > 0 and budget_remaining > 0:
+                    days_remaining = budget_remaining / burn_rate
+                    projected_date = datetime.now() + timedelta(days=days_remaining)
+                    result["projected_completion_date"] = projected_date.strftime("%Y-%m-%d")
+                    result["days_until_budget_exhausted"] = round(days_remaining, 1)
+                elif budget_remaining <= 0:
+                    result["projected_completion_date"] = "budget_exhausted"
+                    result["days_until_budget_exhausted"] = 0
+        except Exception as e:
+            result["burn_rate_error"] = str(e)
+
+    return json.dumps(result, indent=2)
 
 
 if __name__ == "__main__":

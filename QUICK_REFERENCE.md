@@ -78,7 +78,7 @@ Once environment variables are set, every project just needs:
 
 No credentials to manage per-project!
 
-## Available Tools (25 Total)
+## Available Tools (31 Total - 6 NEW!)
 
 ### Users & Assignments
 - `list_users` - List all users with filtering
@@ -118,3 +118,16 @@ No credentials to manage per-project!
 
 ### Company
 - `get_company_info` - Get company/account information
+
+### Reports API (NEW - Fast Pre-Aggregated Data)
+- `get_project_budget_report` - Budget vs actual for all projects (instant)
+- `get_time_report_by_projects` - Aggregated time by project (10-100x faster)
+- `get_time_report_by_team` - Aggregated time by team member (10-100x faster)
+- `get_time_report_by_clients` - Aggregated time by client across all projects (NEW)
+- `get_time_report_by_tasks` - Aggregated time by task type (NEW)
+- `get_project_budget_utilization` - Auto-calculate budget %, burn rate, health (NEW)
+
+### Performance Notes
+- All tools now use 2000 records per page (10x faster than before)
+- Reports API tools are 10-100x faster than fetching individual time entries
+- Perfect for weekly status updates and engagement management

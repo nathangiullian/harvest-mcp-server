@@ -29,6 +29,22 @@ The server provides the following functionality:
 - **Get team hours summary** - Aggregate hours for multiple team members with flexible grouping
 - All reporting tools feature automatic pagination and sorted results
 
+### Reports API (Fast, Pre-Aggregated Data)
+- **Get project budget report** - View budget vs actual hours for all projects (no date range needed)
+- **Get time report by projects** - Fast aggregated time data by project for date ranges
+- **Get time report by team** - Fast aggregated time data by team member for date ranges
+- **Get time report by clients** - Aggregate hours across ALL projects for each client
+- **Get time report by tasks** - See hours by task type (Development, Design, Meetings, etc.)
+- **10-100x faster** than fetching individual time entries - perfect for weekly status updates
+- Uses Harvest's Reports API with pre-aggregated data (default 2000 records per page)
+
+### Budget & Utilization Tools (Engagement Manager Essentials)
+- **Get project budget utilization** - Auto-calculate budget %, burn rate, projected completion
+  - Shows health status (on_track, at_risk, over_budget)
+  - Calculates burn rate (hours per day) from date range
+  - Projects when budget will be exhausted
+  - Perfect for proactive budget management
+
 ### Projects
 - List projects with filtering options
 - Retrieve detailed project information
@@ -166,6 +182,19 @@ Once connected, you can ask Claude about your Harvest data with queries like:
 - "Show me how user [user_id]'s time is distributed across all projects"
 - "Get team hours summary for users [list] grouped by project"
 
+### Fast Reports API (Recommended for Weekly Updates)
+- "Get time report by projects from 2025-01-01 to 2025-01-31" (all projects, pre-aggregated)
+- "Get time report by team from last Monday to today" (all team members, pre-aggregated)
+- "Get time report by clients from last month" (all clients, aggregated across projects)
+- "Get time report by tasks from this week" (task breakdown: dev, design, meetings)
+- "Show me project budget report for active projects" (budget vs actual, all projects)
+
+### Budget Utilization & Health
+- "Get project budget utilization for project 12345" (instant health metrics)
+- "Calculate burn rate for project 12345 from 2025-01-01 to 2025-01-31" (hours per day)
+- "Show me budget health for project 12345" (on_track/at_risk/over_budget)
+- "When will project 12345 run out of budget?" (projected completion date)
+
 ### Clients & Invoices
 - "Show me all active clients"
 - "List invoices for project [project_id]"
@@ -197,7 +226,7 @@ For projects where you frequently query Harvest data, add project IDs to your `c
 
 Then you can easily query: "Get hours summary for the team members listed in claude.md on this project for last month"
 
-### Automatic Pagination
+### Automatic Pagination & Performance
 
 All reporting tools automatically handle pagination, fetching all results across multiple pages. This is perfect for:
 - Large teams with many time entries
@@ -205,6 +234,18 @@ All reporting tools automatically handle pagination, fetching all results across
 - Comprehensive project reports
 
 The original `get_project_time_entries` tool now supports an `auto_paginate` parameter (default: true) for consistent behavior across all tools.
+
+### Performance Optimizations (Latest Update)
+
+**For weekly status updates and reporting, use the new Reports API tools:**
+- `get_time_report_by_projects` - 10-100x faster than fetching individual entries
+- `get_time_report_by_team` - Perfect for team member breakdowns
+- `get_project_budget_report` - Instant budget vs actual for all projects
+
+**Technical improvements:**
+- Increased pagination from 200 to 2000 records per page (10x reduction in API calls)
+- Reports API returns pre-aggregated data (no client-side filtering needed)
+- Default page size of 2000 matches Harvest's maximum limit
 
 ## Customization
 
